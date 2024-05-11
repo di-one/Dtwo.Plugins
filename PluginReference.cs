@@ -11,9 +11,9 @@ namespace Dtwo.Plugins
     public class PluginDependency
     {
         [DataMember]
-        public string PluginName { get; set; }
+        public string? PluginName { get; set; }
 
         [DataMember]
-        public PluginVersion PluginVersionMin { get; set; }
+        public PluginVersion? PluginVersionMin { get; set; }
     }
 }

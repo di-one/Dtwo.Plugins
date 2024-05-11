@@ -20,11 +20,9 @@ namespace Dtwo.Plugins
             m_root = assemblyRoot;
         }
 
-        protected override Assembly Load(AssemblyName assemblyName)
+        protected override Assembly? Load(AssemblyName assemblyName)
         {
-            Console.WriteLine("LoadContext Load : " + assemblyName.Name);
-
-            string assemblyPath = _resolver.ResolveAssemblyToPath(assemblyName);
+            string? assemblyPath = _resolver.ResolveAssemblyToPath(assemblyName);
 
             //var alreadyLoadedAssembly = m_root.GetReferencedAssemblies().FirstOrDefault(x => x.FullName == assemblyName.FullName);
             //Assembly assembly = null;
@@ -77,9 +75,7 @@ namespace Dtwo.Plugins
 
         protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
         {
-            Console.WriteLine("LoadUnmanagedDll Load : " + unmanagedDllName);
-
-            string libraryPath = _resolver.ResolveUnmanagedDllToPath(unmanagedDllName);
+            string? libraryPath = _resolver.ResolveUnmanagedDllToPath(unmanagedDllName);
             if (libraryPath != null)
             {
                 return LoadUnmanagedDllFromPath(libraryPath);

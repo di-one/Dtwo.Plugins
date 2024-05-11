@@ -12,18 +12,18 @@ namespace Dtwo.Plugins
     public class PluginInfos
     {
         [DataMember]
-        public string Name { get; set; }
+        public string? Name { get; set; }
         [DataMember]
-        public string Description { get; set; }
+        public string? Description { get; set; }
         [DataMember]
-        public string AssemblyPath { get; set; }
+        public string? AssemblyPath { get; set; }
         [DataMember]
-        public PluginVersion Version { get; set; }
+        public PluginVersion? Version { get; set; }
 
         [DataMember]
         public int DofusVersion { get; set; }
 
         [DataMember]
-        public List<PluginDependency> Dependencies { get; set; }
+        public List<PluginDependency>? Dependencies { get; set; }
     }
 }

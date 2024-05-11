@@ -22,7 +22,7 @@ namespace Dtwo.Plugins
             if (obj == null)
                 return false;
 
-            PluginVersion other = obj as PluginVersion;
+            PluginVersion? other = obj as PluginVersion;
 
             if (other == null)
                 return false;

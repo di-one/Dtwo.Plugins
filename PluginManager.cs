@@ -1,9 +1,7 @@
 ﻿using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
-using Dtwo.Json;
 using Ionic.Zip;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Dtwo.Plugins
 {
@@ -15,12 +13,10 @@ namespace Dtwo.Plugins
 
         private static Dictionary<string, PluginInfos> m_pluginInfos = new();
 
-        private static AssemblyLoadContext m_context;
+        private static AssemblyLoadContext? m_context;
         private static Assembly LoadAssembly(Stream stream)
         {
             Console.WriteLine("LoadAssembly");
-
-            //Console.WriteLine("Load assembly : " + assemblyPath);
 
             if (m_context == null)
             {
@@ -31,20 +27,16 @@ namespace Dtwo.Plugins
             stream.Position = 0;
 
             return m_context.LoadFromStream(stream);
-
-            //context.Resolving -= Context_Resolving;
-            //context.Unload();
         }
 
-        private static Stream LoadAssemblyStream(string assemblyPath)
+        private static Stream? LoadAssemblyStream(string assemblyPath)
         {
-            Console.WriteLine("LoadAssemblyStream " + assemblyPath);
-
             string name = Path.GetFileName(assemblyPath);
             string nameWithoutExtension = Path.GetFileNameWithoutExtension(assemblyPath);
 
             if (m_streamAssemblies.ContainsKey(name))
             {
+                System.Diagnostics.Debug.WriteLine("Assembly already loaded");
                 return null;
             }
 
@@ -57,13 +49,28 @@ namespace Dtwo.Plugins
                 fs.Close();
             }
 
-            var infos = LoadInfos(Path.GetDirectoryName(assemblyPath), nameWithoutExtension);
+            var directoryName = Path.GetDirectoryName(assemblyPath);
+
+            if (directoryName == null)
+            {
+                System.Diagnostics.Debug.WriteLine("Directory name is null");
+                return null;
+            }
+
+            var infos = LoadInfos(directoryName, nameWithoutExtension);
+
+            if (infos == null)
+            {
+                System.Diagnostics.Debug.WriteLine("Infos is null");
+                return null;
+            }
+
             m_pluginInfos.Add(nameWithoutExtension, infos);
 
             return stream;
         }
 
-        private static Stream LoadAssemblyStream(string pluginName, byte[] bytes)
+        private static Stream? LoadAssemblyStream(string pluginName, byte[] bytes)
         {
             Console.WriteLine("LoadAssemblyStream " + pluginName);
 
@@ -85,38 +92,23 @@ namespace Dtwo.Plugins
             m_streamAssemblies.Add(assemblyName, stream);
         }
 
-        private static Assembly Context_Resolving(AssemblyLoadContext context, AssemblyName assemblyName)
+        private static Assembly? Context_Resolving(AssemblyLoadContext context, AssemblyName assemblyName)
         {
-            Console.WriteLine("Context_Resolving");
-            Console.WriteLine("name resolving" + assemblyName.Name);
+            if (assemblyName.Name == null)
+            {
+                return null;
+            }
+
 
             Stream stream = m_streamAssemblies[assemblyName.Name];
             stream.Position = 0;
-            //var expectedPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory + "plugins", assemblyName.Name + ".dll");
-            return context.LoadFromStream(stream);
-        }
 
-        public static void UnloadPlugin(string pluginName)
-        {
-            //if (m_plugins.ContainsKey(pluginName))
-            //{
-            //    Console.WriteLine($"UnloadPlugin : plugin {pluginName} unloaded");
-            //    m_plugins[pluginName].Unload();
-            //    m_plugins[assemblyPath].EnterContextualReflection().Dispose();
-            //    m_plugins.Remove(assemblyPath);
-            //}
-            //else
-            //{
-            //    Console.WriteLine($"UnloadPlugin : path {assemblyPath} not found");
-            //}
+            return context.LoadFromStream(stream);
         }
 
         private static List<Assembly> LoadAssemblies()
         {
-            Console.WriteLine("Load assemblies");
-
             List<Assembly> assemblies = new List<Assembly>();
-            //string[] files = System.IO.Directory.GetFiles(folderPath, "Dtwo.Plugins.*.dll");
 
             for (int i = 0; i < m_streamAssemblies.Count; i++)
             {
@@ -127,9 +119,9 @@ namespace Dtwo.Plugins
             return assemblies;
         }
         
-        private static PluginInfos LoadInfos(string folder, string assemblyName)
+        private static PluginInfos? LoadInfos(string folder, string assemblyName)
         {
-            PluginInfos pluginInfos = null;
+            PluginInfos? pluginInfos;
             string path = folder + "\\"+ assemblyName + ".Infos.json";
 
             if (File.Exists(path))
@@ -137,28 +129,26 @@ namespace Dtwo.Plugins
                 try
                 {
                     string txt = File.ReadAllText(path);
-                    pluginInfos = JSonSerializer<PluginInfos>.DeSerialize(txt);
+                    pluginInfos = Newtonsoft.Json.JsonConvert.DeserializeObject<PluginInfos>(txt);
                     return pluginInfos;
                 }
                 catch (Exception ex)
                 {
 
-                    Console.WriteLine($"PluginManager : Error on load infos ({path} {ex.Message})");
+                    System.Diagnostics.Debug.WriteLine($"PluginManager : Error on load infos ({path} {ex.Message})");
                     return null;
                 }
             }
             else
             {
-                Console.WriteLine("Infos file not found for " + path);
+                System.Diagnostics.Debug.WriteLine("Infos file not found for " + path);
             }
 
             return null;
         }
 
-        public static List<T> LoadPlugins<T>(string folderPath) where T : PluginController
+        public static List<T>? LoadPlugins<T>(string folderPath) where T : PluginController
         {
-            Console.WriteLine("Load plugins at path " + folderPath);
-
             LoadAssembliesStreams(folderPath);
 
             List<T> plugins = new List<T>();
@@ -170,25 +160,47 @@ namespace Dtwo.Plugins
                 {
                     var asm = assemblies[i];
 
-                    if (asm.FullName.Contains("Plugins") == false)
+                    var asmFullName = asm.FullName;
+
+                    if (asmFullName == null)
                     {
-                        Console.WriteLine("Is not plugin " + asm.FullName);
+                        System.Diagnostics.Debug.WriteLine("Assembly is null");
                         continue;
                     }
 
-                    PluginInfos infos = LoadInfos(folderPath, asm.GetName().Name);
-                    T plugin = CreatePlugin<T>(assemblies[i], infos);
+                    if (asmFullName.Contains("Plugins") == false)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Is not plugin " + asm.FullName);
+                        continue;
+                    }
+
+                    var asmName = asm.GetName();
+                    if (asmName == null || asmName.Name == null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Assembly name is null");
+                        continue;
+                    }
+
+                    PluginInfos? infos = LoadInfos(folderPath, asmName.Name);
+
+                    if (infos == null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Infos is null");
+                        continue;
+                    }
+
+                    T? plugin = CreatePlugin<T>(assemblies[i], infos);
                     if (plugin != null)
                     {
                         plugins.Add(plugin);
                     }
                     else
                     {
-                        Console.WriteLine($"Error on load plugin {infos.Name}");
+                        System.Diagnostics.Debug.WriteLine($"Error on load plugin {infos.Name}");
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return null;
             }
@@ -197,80 +209,78 @@ namespace Dtwo.Plugins
         }
 
 
-        public static List<T> LoadPlugins<T>(List<byte[]> bytes, string pwd, string otherPluginsFolder) where T : PluginController
+        public static List<T>? LoadPlugins<T>(List<byte[]>? bytes, string pwd, string otherPluginsFolder) where T : PluginController
         {
             return InternalLoadPlugins<T>(bytes, pwd, otherPluginsFolder);
         }
 
-        private static List<T> InternalLoadPlugins<T>(List<byte[]> bytes, string pwd, string otherPluginsFolder) where T : PluginController
+        private static List<T>? InternalLoadPlugins<T>(List<byte[]>? bytes, string pwd, string otherPluginsFolder) where T : PluginController
         {
-            List<T> plugins = new List<T>();
+            List<T> plugins = new();
 
-            foreach (var b in bytes)
+            // Load with bytes
+            if (bytes != null)
             {
-                using (MemoryStream ms = new MemoryStream(b))
+                foreach (var b in bytes)
                 {
+                    using MemoryStream ms = new MemoryStream(b);
                     ms.Position = 0;
 
-                    using (ZipFile zip = ZipFile.Read(ms))
+                    using ZipFile zip = ZipFile.Read(ms);
+                    zip.Encryption = EncryptionAlgorithm.WinZipAes256;
+
+                    foreach (ZipEntry entry in zip)
                     {
-                        zip.Encryption = EncryptionAlgorithm.WinZipAes256;
-
-                        foreach (ZipEntry entry in zip)
+                        if (Path.GetExtension(entry.FileName) == ".dll")
                         {
-                            if (Path.GetExtension(entry.FileName) == ".dll")
-                            {
-                                using (MemoryStream dllMs = new MemoryStream()) // Todo : opti
-                                {
-                                    entry.Encryption = EncryptionAlgorithm.WinZipAes256;
-                                    entry.ExtractWithPassword(dllMs, pwd);
-                                    dllMs.Position = 0;
-                                    byte[] dllBytes = new byte[dllMs.Length];
-                                    dllMs.Read(dllBytes, 0, dllBytes.Length);
+                            using MemoryStream dllMs = new MemoryStream(); // Todo : opti
+                            entry.Encryption = EncryptionAlgorithm.WinZipAes256;
+                            entry.ExtractWithPassword(dllMs, pwd);
+                            dllMs.Position = 0;
+                            byte[] dllBytes = new byte[dllMs.Length];
+                            dllMs.Read(dllBytes, 0, dllBytes.Length);
 
-                                    LoadAssemblyStream(entry.FileName, dllBytes);
-                                }
+                            LoadAssemblyStream(entry.FileName, dllBytes);
+                        }
+
+                        else if (entry.FileName.Contains(".Infos.json"))
+                        {
+                            PluginInfos? infos = null;
+                            try
+                            {
+                                using MemoryStream dllMs = new MemoryStream();
+                                entry.Encryption = EncryptionAlgorithm.WinZipAes256;
+                                entry.ExtractWithPassword(dllMs, pwd);
+                                dllMs.Position = 0;
+                                byte[] dllBytes = new byte[dllMs.Length];
+                                dllMs.Read(dllBytes, 0, dllBytes.Length);
+
+                                infos = Newtonsoft.Json.JsonConvert.DeserializeObject<PluginInfos>(System.Text.Encoding.ASCII.GetString(dllBytes));
+
+                            }
+                            catch (Exception ex)
+                            {
+
+                                Console.WriteLine($"PluginManager : Error on load infos ({ex.Message})");
+                                return null;
                             }
 
-                            else if (entry.FileName.Contains(".Infos.json"))
+                            if (infos == null)
                             {
-                                PluginInfos infos = null;
-                                try
-                                {
-                                    using (MemoryStream dllMs = new MemoryStream()) // Todo : opti
-                                    {
-                                        entry.Encryption = EncryptionAlgorithm.WinZipAes256;
-                                        entry.ExtractWithPassword(dllMs, pwd);
-                                        dllMs.Position = 0;
-                                        byte[] dllBytes = new byte[dllMs.Length];
-                                        dllMs.Read(dllBytes, 0, dllBytes.Length);
-
-                                        infos = JSonSerializer<PluginInfos>.DeSerialize(System.Text.Encoding.ASCII.GetString(dllBytes));
-                                    }
-
-                                }
-                                catch (Exception ex)
-                                {
-
-                                    Console.WriteLine($"PluginManager : Error on load infos ({ex.Message})");
-                                    return null;
-                                }
-
-                                if (infos == null)
-                                {
-                                    Console.WriteLine($"PluginManager : Error on load infos");
-                                    return null;
-                                }
-                                else
-                                {
-                                    m_pluginInfos.Add(entry.FileName.Replace(".Infos.json", ""), infos);
-                                }
+                                Console.WriteLine($"PluginManager : Error on load infos");
+                                return null;
+                            }
+                            else
+                            {
+                                m_pluginInfos.Add(entry.FileName.Replace(".Infos.json", ""), infos);
                             }
                         }
                     }
                 }
             }
 
+
+            // Load with folders
             LoadAssembliesStreams(otherPluginsFolder);
             List<Assembly> assemblies = LoadAssemblies();
 
@@ -280,14 +290,27 @@ namespace Dtwo.Plugins
                 {
                     var asm = assemblies[i];
 
-                    if (asm.FullName.Contains("Plugins") == false)
+                    if (asm == null)
+                    {
+                        Console.WriteLine("Assembly is null");
+                        continue;
+                    }
+
+                    if (asm.FullName?.Contains("Plugins") == false)
                     {
                         Console.WriteLine("Is not plugin " + asm.FullName);
                         continue;
                     }
 
-                    PluginInfos infos = m_pluginInfos[asm.GetName().Name];
-                    T plugin = CreatePlugin<T>(assemblies[i], infos);
+                    var asmName = asm.GetName();
+                    if (asmName == null || asmName.Name == null)
+                    {
+                        Console.WriteLine("Assembly name is null");
+                        continue;
+                    }
+
+                    PluginInfos infos = m_pluginInfos[asmName.Name];
+                    T? plugin = CreatePlugin<T>(assemblies[i], infos);
                     if (plugin != null)
                     {
                         plugins.Add(plugin);
@@ -298,7 +321,7 @@ namespace Dtwo.Plugins
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return null;
             }
@@ -308,8 +331,6 @@ namespace Dtwo.Plugins
 
         private static void LoadAssembliesStreams(string folderPath)
         {
-            Console.WriteLine("LoadPluginStreams");
-
             string[] files = System.IO.Directory.GetFiles(folderPath, "*.dll");
 
             for (int i = 0; i < files.Length; i++)
@@ -329,19 +350,17 @@ namespace Dtwo.Plugins
         }
 
 
-        public static T CreatePlugin<T>(Assembly assembly, PluginInfos infos) where T : PluginController
+        public static T? CreatePlugin<T>(Assembly assembly, PluginInfos infos) where T : PluginController
         {
             try
             {
                 int i = 0;
-                Console.WriteLine("Create plugin " + assembly.FullName);
 
                 foreach (Type type in assembly.GetTypes())
                 {
                     if (typeof(T).IsAssignableFrom(type))
                     {
-                        T result = Activator.CreateInstance(type, infos, assembly) as T;
-                        if (result != null)
+                        if (Activator.CreateInstance(type, infos, assembly) is T result)
                         {
                             return result;
                         }
